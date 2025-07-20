@@ -172,6 +172,106 @@ THEN UPDATE SET T.Value = S.Value WHEN NOT MATCHED BY TARGET     THEN INSERT
 | Maintenance plans (Rebuild/Reorg)   | ✅ Ola Hallengren scripts or Agent jobs | ✅ Same           | ⚠️ Requires custom implementation |
 | Query Store                         | ✅ Optional (2016+)         | ✅ Optional                 | ✅ Enabled by default       |
 
+
+
+## Performance Monitoring
+
+SQL Server offers a variety of built-in tools for performance monitoring. Modern best practices emphasize lightweight, low-overhead tools that can be used in production environments with minimal impact.
+
+### Query Store
+
+Query Store is a feature that captures a history of query execution plans, runtime statistics, and regressions over time.
+
+**Key Benefits:**
+- Identifies performance regressions automatically
+- Retains historical performance data across server restarts
+- Supports plan forcing to stabilize workloads
+
+**Configuration Example:**
+```sql
+ALTER DATABASE [MyDatabase]
+SET QUERY_STORE = ON;
+ALTER DATABASE [MyDatabase]
+SET QUERY_STORE (
+    OPERATION_MODE = READ_WRITE,
+    CLEANUP_POLICY = (STALE_QUERY_THRESHOLD_DAYS = 30)
+);
+```
+
+**Useful Reports:**
+- Top Resource Consuming Queries
+- Regressed Queries
+- Forced Plan Usage
+
+**DMVs:**
+- `sys.query_store_query`
+- `sys.query_store_plan`
+- `sys.query_store_runtime_stats`
+
+> 📌 *Recommended for all OLTP databases from SQL Server 2016 onward.*
+
+---
+
+### Dynamic Management Views (DMVs)
+
+DMVs expose live metadata and runtime statistics for diagnosing SQL Server performance.
+
+**Commonly Used DMVs:**
+
+| DMV | Purpose |
+|-----|---------|
+| `sys.dm_exec_requests` | Shows active requests, useful for real-time monitoring |
+| `sys.dm_exec_query_stats` | Tracks aggregated query performance |
+| `sys.dm_db_index_usage_stats` | Helps evaluate index usage and identify unused indexes |
+| `sys.dm_os_wait_stats` | Analyzes wait types to identify bottlenecks |
+| `sys.dm_db_missing_index_details` | Identifies potentially beneficial indexes |
+
+**Example – Top 5 CPU-Consuming Queries:**
+```sql
+SELECT TOP 5
+    qs.total_worker_time / qs.execution_count AS AvgCPU,
+    qs.execution_count,
+    qt.text
+FROM sys.dm_exec_query_stats qs
+CROSS APPLY sys.dm_exec_sql_text(qs.sql_handle) qt
+ORDER BY AvgCPU DESC;
+```
+
+> 🧠 *Use DMVs in combination with historical baselines for trend analysis.*
+
+---
+
+### Extended Events (XEvents)
+
+Extended Events provide a flexible and lightweight framework for capturing detailed event-level data with minimal performance impact.
+
+**Use Cases:**
+- Capturing deadlocks
+- Analyzing query wait types
+- Monitoring tempdb contention
+- Tracking long-running queries
+
+**Creating a Session (Deadlocks Example):**
+```sql
+CREATE EVENT SESSION [CaptureDeadlocks] ON SERVER
+ADD EVENT sqlserver.deadlock_graph
+ADD TARGET package0.ring_buffer
+WITH (STARTUP_STATE = ON);
+GO
+ALTER EVENT SESSION [CaptureDeadlocks] ON SERVER STATE = START;
+```
+
+**Viewing Captured Events:**
+
+Use the Extended Events GUI in SSMS under **Management > Extended Events > Sessions**, or query the ring buffer:
+
+```sql
+SELECT 
+    event_data.value('(event/@name)[1]', 'varchar(50)') AS event_name,
+    event_data.value('(event/data[@name="xml_report"]/value)[1]', 'xml') AS deadlock_graph
+FROM (
+    SELECT CAST(event_data AS XML) AS ev_
+
 ------------------------
 --------------------
 -----------------
