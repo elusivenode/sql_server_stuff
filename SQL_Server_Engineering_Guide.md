@@ -172,7 +172,7 @@ THEN UPDATE SET T.Value = S.Value WHEN NOT MATCHED BY TARGET     THEN INSERT
 | Maintenance plans (Rebuild/Reorg)   | ✅ Ola Hallengren scripts or Agent jobs | ✅ Same           | ⚠️ Requires custom implementation |
 | Query Store                         | ✅ Optional (2016+)         | ✅ Optional                 | ✅ Enabled by default       |
 
-
+---
 
 ## Performance Monitoring
 
