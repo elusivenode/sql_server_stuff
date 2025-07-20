@@ -106,20 +106,72 @@ THEN UPDATE SET T.Value = S.Value WHEN NOT MATCHED BY TARGET     THEN INSERT
     | Error Handling          | All-or-nothing                     | Finer control                    |
 
 
-## Indexing & Performance Tuning
+## 🧠 Indexing & Performance Tuning
 
-Core Concepts:
-- Clustered vs Non-clustered indexes
-- INCLUDE columns, filtered indexes
-- Columnstore indexes, execution plans
-- DMVs: sys.dm_exec_requests, sys.dm_exec_query_stats
-- Index fragmentation and statistics
-Environment Differences:
-Feature
-On-Prem SQL Server
-Azure IaaS (VM)
-Azure SQL Managed
-Instance
+### 🔧 Core Concepts
+
+**🔹 Clustered vs Non-Clustered Indexes**  
+- A **clustered index** determines the **physical order** of rows in a table. Each table can have only one.  
+  - Ideal for **range queries**, sorting, and grouping.  
+  - Typically created on the **primary key**.  
+- A **non-clustered index** is a separate structure that points to the actual data rows.  
+  - Multiple non-clustered indexes can exist per table.  
+  - Best for **point lookups**, **JOINs**, and selective filters.
+
+**🔹 INCLUDE Columns & Filtered Indexes**  
+- The `INCLUDE` clause allows you to add **non-key columns** to the leaf level of a non-clustered index.  
+  - Useful for creating **covering indexes** that eliminate the need for key lookups.  
+  ```sql
+  CREATE INDEX IX_Customer_Email ON Customers (LastName) INCLUDE (Email, Phone);
+  ```
+- **Filtered indexes** only index a **subset of rows**, improving performance and reducing index size.  
+  - Especially effective for columns with sparse data (e.g. `IsActive = 1`).  
+  ```sql
+  CREATE INDEX IX_Active_Customers ON Customers (CustomerID) WHERE IsActive = 1;
+  ```
+
+**🔹 Columnstore Indexes & Execution Plans**  
+- **Columnstore indexes** store data by column rather than by row.  
+  - Great for **analytics** on large datasets (e.g. fact tables).  
+  - Compress well and support batch mode processing.  
+  - Available as **clustered** or **non-clustered** columnstores.  
+- **Execution plans** (estimated or actual) are essential for diagnosing query performance:  
+  - Use to identify **scans vs seeks**, **missing indexes**, and expensive operators like **hash joins**.
+
+**🔹 Dynamic Management Views (DMVs)**  
+- Useful DMVs for performance analysis include:  
+  - `sys.dm_exec_requests` — Shows currently executing queries.  
+  - `sys.dm_exec_query_stats` — Aggregated performance stats (CPU time, I/O, executions).  
+  - `sys.dm_db_missing_index_details` — Lists suggested indexes (review before implementing).  
+  - `sys.dm_db_index_physical_stats` — Provides fragmentation data per index.
+
+**🔹 Index Fragmentation & Statistics**  
+- Indexes can become **fragmented**, especially after many DML operations:  
+  - Use `REORGANIZE` if fragmentation is between 5–30%.  
+  - Use `REBUILD` if fragmentation exceeds 30%.  
+  ```sql
+  ALTER INDEX IX_SalesDate ON Sales REBUILD;
+  ```
+- **Statistics** help the optimizer estimate row counts and choose efficient plans.  
+  - Keep up to date via `AUTO_UPDATE_STATISTICS` or schedule manual updates.  
+  ```sql
+  UPDATE STATISTICS dbo.MyTable WITH FULLSCAN;
+  ```
+
+---
+
+### 🏗️ Environment Differences
+
+| Feature                             | On-Prem SQL Server         | Azure IaaS (SQL on VM)     | Azure SQL Managed Instance |
+|-------------------------------------|-----------------------------|-----------------------------|-----------------------------|
+| Full control of indexing & strategy | ✅ Yes                      | ✅ Yes                      | ⚠️ Most features supported, some restrictions |
+| Index rebuild scheduling            | ✅ SQL Agent / Maintenance Plans | ✅ SQL Agent Jobs        | ⚠️ Use Elastic Jobs or Logic Apps |
+| DMV access                          | ✅ Full                     | ✅ Full                     | ✅ Most commonly used DMVs supported |
+| Auto statistics update              | ✅ Configurable             | ✅ Configurable             | ✅ Enabled by default       |
+| Columnstore index support           | ✅ Yes                      | ✅ Yes                      | ✅ Yes                      |
+| Maintenance plans (Rebuild/Reorg)   | ✅ Ola Hallengren scripts or Agent jobs | ✅ Same           | ⚠️ Requires custom implementation |
+| Query Store                         | ✅ Optional (2016+)         | ✅ Optional                 | ✅ Enabled by default       |
+
 ------------------------
 --------------------
 -----------------
